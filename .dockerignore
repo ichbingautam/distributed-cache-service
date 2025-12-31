@@ -1,0 +1,19 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Kubernetes
+k8s/
+
+# Build artifacts
+server
+raft_data/
+raft_node*/
+
+# Go
+vendor/
+go.work

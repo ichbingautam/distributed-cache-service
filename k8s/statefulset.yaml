@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: cache-node
+spec:
+  serviceName: "cache-service-headless"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cache-service
+  template:
+    metadata:
+      labels:
+        app: cache-service
+    spec:
+      containers:
+        - name: cache-server
+          image: distributed-cache-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 11000
+              name: raft
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Determine Node ID from Pod Name (cache-node-0 -> node0)
+              NODE_ID=${POD_NAME}
+
+              # Construct FQDN for stable network identity
+              RAFT_ADDR=${POD_NAME}.cache-service-headless.default.svc.cluster.local:11000
+
+              # If node-0, bootstrap. Else, try to join node-0.
+              if [ "$POD_NAME" = "cache-node-0" ]; then
+                echo "Bootstrapping cluster as the leader..."
+                exec ./server -node_id $NODE_ID -http_addr :8080 -raft_addr :11000 -raft_dir /app/raft_data -bootstrap
+              else
+                echo "Joining cluster via cache-node-0..."
+                # Wait for leader to be ready (simple sleep loop)
+                exec ./server -node_id $NODE_ID -http_addr :8080 -raft_addr :11000 -raft_dir /app/raft_data -join cache-node-0.cache-service-headless.default.svc.cluster.local:8080
+              fi
+          volumeMounts:
+            - name: raft-pvc
+              mountPath: /app/raft_data
+  volumeClaimTemplates:
+    - metadata:
+        name: raft-pvc
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

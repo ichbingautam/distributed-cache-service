@@ -1,0 +1,25 @@
+# Binaries
+server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Raft data directory
+raft_data/
+raft_node*/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Vendor
+vendor/

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package cache;
+
+option go_package = "github.com/distributed-cache-service/proto";
+
+service CacheService {
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc Set(SetRequest) returns (SetResponse);
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetResponse {
+  string value = 1;
+  bool found = 2;
+}
+
+message SetRequest {
+  string key = 1;
+  string value = 2;
+  int64 ttl = 3; // TTL in seconds
+}
+
+message SetResponse {
+  bool success = 1;
+}
+
+message DeleteRequest {
+  string key = 1;
+}
+
+message DeleteResponse {
+  bool success = 1;
+}
+
+// Internal messages for Raft can be defined here or in a separate file.
+// For now, we'll keep the public API clean.
