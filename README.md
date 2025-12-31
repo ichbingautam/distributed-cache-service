@@ -75,14 +75,15 @@ graph TD
 
 The server accepts the following command-line flags:
 
-| Flag          | Default      | Description                                      |
-|---------------|--------------|--------------------------------------------------|
-| `-node_id`    | `node1`      | Unique identifier for the Raft node.             |
-| `-http_addr`  | `:8080`      | Address to bind the HTTP server.                 |
-| `-raft_addr`  | `:11000`     | Address to bind the Raft transport.              |
-| `-raft_dir`   | `raft_data`  | Directory to store Raft data (logs/snapshots).   |
-| `-bootstrap`  | `false`      | Set to `true` to bootstrap a new cluster (leader).|
-| `-join`       | `""`         | Address of an existing leader to join.           |
+| Flag              | Default      | Description                                      |
+|-------------------|--------------|--------------------------------------------------|
+| `-node_id`        | `node1`      | Unique identifier for the Raft node.             |
+| `-http_addr`      | `:8080`      | Address to bind the HTTP server.                 |
+| `-raft_addr`      | `:11000`     | Address to bind the Raft transport.              |
+| `-raft_advertise` | `""`         | Advertised Raft address (defaults to local IP).  |
+| `-raft_dir`       | `raft_data`  | Directory to store Raft data (logs/snapshots).   |
+| `-bootstrap`      | `false`      | Set to `true` to bootstrap a new cluster (leader).|
+| `-join`           | `""`         | Address of an existing leader to join.           |
 
 ## Deployment
 
@@ -113,7 +114,7 @@ The server accepts the following command-line flags:
 2.  Sign up at [render.com](https://render.com).
 3.  Click **New +** -> **Blueprint**.
 4.  Connect your repository.
-5.  Render will automatically detect `render.yaml` and deploy.
+5.  Render will automatically detect `render.yaml` and deploy (defaulting to PORT 8000).
 
 
 To run a 3-node cluster locally:
