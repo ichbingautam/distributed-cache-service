@@ -28,15 +28,6 @@ Designed with **Hexagonal Architecture** (Ports and Adapters), the core business
 - **Storage**: In-Memory Thread-Safe Map with TTL support.
 - **API**: HTTP (Fallback) / gRPC (Planned).
 
-    subgraph "Core Domain (Hexagonal)"
-        API --> Service[Service Layer]
-        Service -->|Port| StorePort[Storage Port]
-        Service -->|Port| ConsensusPort[Consensus Port]
-    end
-    StorePort -->|Adapter| MemStore[In-Memory Store]
-    ConsensusPort -->|Adapter| Raft[Raft Consensus]
-    Raft -->|Replicate| Peer[Peer Nodes]
-```
 
 ### Consistent Hashing Ring
 
@@ -60,6 +51,15 @@ graph TD
 ```mermaid
 graph TD
     Client[Client] -->|HTTP/gRPC| API[API Interface]
+    subgraph "Core Domain (Hexagonal)"
+        API --> Service[Service Layer]
+        Service -->|Port| StorePort[Storage Port]
+        Service -->|Port| ConsensusPort[Consensus Port]
+    end
+    StorePort -->|Adapter| MemStore[In-Memory Store]
+    ConsensusPort -->|Adapter| Raft[Raft Consensus]
+    Raft -->|Replicate| Peer[Peer Nodes]
+```
 
 ## Project Structure
 
