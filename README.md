@@ -28,6 +28,24 @@ Designed with **Hexagonal Architecture** (Ports and Adapters), the core business
 - **Storage**: In-Memory Thread-Safe Map with TTL support.
 - **API**: HTTP (Fallback) / gRPC (Planned).
 
+
+### Consistent Hashing Ring
+
+```mermaid
+graph TD
+    Keys[Keys: k1, k2, k3] --> Hash[Hash Function]
+    Hash --> Ring((Hash Ring))
+
+    subgraph "Consistent Hashing Ring"
+        Ring -.->|k1| V1[Node1_TokenA]
+        Ring -.->|k2| V2[Node2_TokenA]
+        Ring -.->|k3| V3[Node1_TokenB]
+
+        V1 -.->|Map to| Node1[Physical Node 1]
+        V3 -.->|Map to| Node1
+        V2 -.->|Map to| Node2[Physical Node 2]
+    end
+```
 ### Architecture Diagram
 
 ```mermaid
@@ -41,18 +59,6 @@ graph TD
     StorePort -->|Adapter| MemStore[In-Memory Store]
     ConsensusPort -->|Adapter| Raft[Raft Consensus]
     Raft -->|Replicate| Peer[Peer Nodes]
-```
-
-### Consistent Hashing Ring
-
-```mermaid
-graph TD
-    Keys[Keys: k1, k2, k3] --> Hash[Hash Function]
-    Hash --> Ring((Hash Ring))
-    Ring -.->|k1| Node1[Node 1]
-    Ring -.->|k2| Node2[Node 2]
-    Ring -.->|k3| Node3[Node 3]
-    Node1 -.->|Backup| Node2
 ```
 
 ## Project Structure
@@ -87,6 +93,8 @@ The server accepts the following command-line flags:
 | `-join`           | `""`         | Address of an existing leader to join.           |
 | `-max_items`      | `0`          | Max items in cache `(0 = unlimited)`.            |
 | `-eviction_policy`| `lru`        | Policy: `lru`, `fifo`, `lfu`, `random`.          |
+| `-virtual_nodes`  | `100`        | Virtual nodes per physical node (Ring distribution).|
+| `-consistency`    | `strong`     | Read consistency: `strong` (CP) or `eventual` (AP).|
 
 ## Eviction Policies
 
@@ -96,6 +104,64 @@ When `max_items` is set, the cache enforces capacity limits using the selected p
 2.  **FIFO (First-In-First-Out)**: Evicts the oldest added items first. Useful when access patterns are strictly sequential or data freshness is determined by insertion order.
 3.  **LFU (Least Frequently Used)**: Evicts items with the lowest access frequency. Ideal for keeping "popular" or "hot" items in cache regardless of how recently they were accessed.
 4.  **Random**: Evicts a random item. Lowest CPU/Memory overhead (O(1)), suitable for very large datasets where probabilistic approximation is sufficient.
+
+## Advanced Configuration
+
+### 1. Tunable Consistency (`-consistency`)
+The system implements a **Tunable Consistency** model for *Read Operations*, allowing operators to choose between consistency and latency based on their requirements (CAP Theorem).
+
+> **Note**: *Write Operations* (`Set`, `Delete`) are **always Strongly Consistent** via Raft Quorum, regardless of this setting.
+
+#### Mode A: Strong Consistency (`strong`) - Default
+*   **Guarantee**: **Linearizability**. Clients are guaranteed to see the latest committed write. Stale reads are impossible.
+*   **Design Mechanism (Read Lease)**:
+    1.  Client sends `Get(Key)` to the Leader.
+    2.  Leader calls `raft.VerifyLeader()`. This triggers a check to confirm it still holds the "Lease" (contact with a majority of nodes).
+    3.  **Prevents Zombie Leaders**: If the Leader is partitioned, `VerifyLeader()` fails, and the request is rejected (500 Error) rather than returning old data.
+    4.  If verified, Leader reads from local FSM.
+*   **Trade-off**: Higher Latency (due to heartbeat check) & Reduced Availability (Fails during partitions).
+
+#### Mode B: Eventual Consistency (`eventual`)
+*   **Guarantee**: **Eventual Consistency**. Reads are fast but may be stale.
+*   **Design Mechanism (Local Read)**:
+    1.  Client sends `Get(Key)` to *any* node (Leader or Follower).
+    2.  Node reads directly from its local in-memory FSM (`memStore`).
+    3.  Returns value immediately without network chatter.
+*   **Trade-off**: Lowest Latency & High Availability (Works even if disconnected from cluster), but risk of Stale Reads (if follower is lagging).
+
+### 2. Virtual Nodes (`-virtual_nodes`)
+Designed to prevent **Data Skew** in the Consistent Hashing ring.
+
+#### Mechanics
+*   **Without Virtual Nodes**: One node might get 50% of the key space.
+*   **With 100 Virtual Nodes**: Each physical node is hashed 100 times (`node1_0` ... `node1_99`), interlacing them on the ring.
+*   **Result**: Even distribution. Standard Deviation of keys per node drops significantly (e.g., from ~30k to ~1k keys variation).
+
+#### Edge Cases
+*   **Low Virtual Node Count** (e.g., `1`): If `node1` is adjacent to `node2` on the ring and `node2` leaves, `node1` might instantly inherit 50% of the traffic, causing a cascading failure (Hot Spot).
+*   **Node Failure**: In a sharded setup (future), losing a physical node means losing 100 small segments. This spreads the recovery load across **all** remaining nodes rather than hammering just one neighbor.
+
+#### Ring Rebalancing (Join Event)
+When a new node (e.g., `Node 4`) joins the ring:
+1.  **Token Generation**: It generates 100 random tokens (Virtual Nodes).
+2.  **Insertion**: These tokens are placed at random points on the Ring.
+3.  **Load Stealing**: The new node takes ownership of keys that fall *just before* its new tokens.
+4.  **Impact**: It "steals" a small amount of data from `Node 1`, a small amount from `Node 2`, and `Node 3`.
+5.  **Result**: The new node instantly shares ~1/4th of the total load, with minimal data movement (only strictly necessary keys move).
+
+### 3. Dynamic Membership (Joiner Mode)
+The cluster does not require a static config. Nodes join dynamically via the Raft API.
+
+#### Workflow
+1.  **Bootstrap**: Start Server A with `-bootstrap`. It elects itself Leader.
+2.  **Join Request**: Server B starts with `-join <Server A Address>`.
+3.  **Raft Configuration Change**: Server A receives the join request, proposes a `AddVoter` configuration change to the Raft log.
+4.  **Replication**: Once committed, Server B receives the snapshot and current logs, becoming a full voting member.
+
+#### Edge Cases
+*   **Leader Down during Join**: The join request will fail or timeout. The joining node must retry with a Backoff strategy until a new leader is elected.
+*   **Joining a Follower**: Ideally, followers forward the request to the Leader. If not, the joining node receives a "Not Leader" error (and usually a hint about who the leader is).
+*   **Duplicate Join**: Raft handles idempotency. If a node tries to join but is already a member, the operation is a no-op (success).
 
 ## Deployment
 
@@ -133,17 +199,17 @@ To run a 3-node cluster locally:
 
 **Node 1 (Leader):**
 ```bash
-./server -node_id node1 -http_addr :8081 -raft_addr :11001 -raft_dir raft_node1 -bootstrap
+./server -node_id node1 -http_addr :8081 -raft_addr :11001 -raft_dir raft_node1 -bootstrap -virtual_nodes 100 -consistency eventual
 ```
 
 **Node 2 (Follower):**
 ```bash
-./server -node_id node2 -http_addr :8082 -raft_addr :11002 -raft_dir raft_node2 -join localhost:8081
+./server -node_id node2 -http_addr :8082 -raft_addr :11002 -raft_dir raft_node2 -join localhost:8081 -virtual_nodes 100 -consistency eventual
 ```
 
 **Node 3 (Follower):**
 ```bash
-./server -node_id node3 -http_addr :8083 -raft_addr :11003 -raft_dir raft_node3 -join localhost:8081
+./server -node_id node3 -http_addr :8083 -raft_addr :11003 -raft_dir raft_node3 -join localhost:8081 -virtual_nodes 100 -consistency eventual
 ```
 
 ## API Documentation
@@ -197,9 +263,9 @@ curl http://localhost:8080/metrics
 
 ## Usage Examples
 
-**Start the Server:**
+**Start the Server (Strong Consistency & 100 Virtual Nodes):**
 ```bash
-./server -node_id node1 -http_addr :8080 -raft_addr :11000 -raft_dir raft_node1 -bootstrap
+./server -node_id node1 -http_addr :8080 -raft_addr :11000 -raft_dir raft_node1 -bootstrap -virtual_nodes 100 -consistency strong
 ```
 
 **Write a Value:**
