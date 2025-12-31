@@ -5,26 +5,12 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
 
+	"distributed-cache-service/internal/core/service"
 	"distributed-cache-service/internal/store"
 
 	"github.com/hashicorp/raft"
 )
-
-type CommandType string
-
-const (
-	SetOp    CommandType = "SET"
-	DeleteOp CommandType = "DELETE"
-)
-
-type Command struct {
-	Op    CommandType   `json:"op"`
-	Key   string        `json:"key"`
-	Value string        `json:"value,omitempty"`
-	TTL   time.Duration `json:"ttl,omitempty"`
-}
 
 // FSM implements raft.FSM interface
 type FSM struct {
@@ -40,15 +26,15 @@ func NewFSM(s *store.Store) *FSM {
 
 // Apply applies a Raft log entry to the key-value store.
 func (f *FSM) Apply(log *raft.Log) interface{} {
-	var c Command
+	var c service.Command
 	if err := json.Unmarshal(log.Data, &c); err != nil {
 		return fmt.Errorf("failed to unmarshal command: %w", err)
 	}
 
 	switch c.Op {
-	case SetOp:
+	case service.SetOp:
 		f.store.Set(c.Key, c.Value, c.TTL)
-	case DeleteOp:
+	case service.DeleteOp:
 		f.store.Delete(c.Key)
 	default:
 		return fmt.Errorf("unknown command op: %s", c.Op)
@@ -58,6 +44,7 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 
 // Snapshot returns a snapshot object
 func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
+
 	// In a real system, we might want to copy the map efficiently.
 	// For now, we rely on the store's Snapshot method which locks the store.
 	return &Snapshot{store: f.store}, nil

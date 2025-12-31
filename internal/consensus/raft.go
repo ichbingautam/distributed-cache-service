@@ -55,3 +55,22 @@ func SetupRaft(dir, nodeId, bindAddr string, fsm *FSM) (*raft.Raft, error) {
 
 	return ra, nil
 }
+
+// Wrapper to satisfy ports.Consensus interface
+type RaftNode struct {
+	Raft *raft.Raft
+}
+
+func (n *RaftNode) Apply(cmd []byte) error {
+	f := n.Raft.Apply(cmd, 500*time.Millisecond) // Lower timeout
+	return f.Error()
+}
+
+func (n *RaftNode) AddVoter(id, addr string) error {
+	f := n.Raft.AddVoter(raft.ServerID(id), raft.ServerAddress(addr), 0, 0)
+	return f.Error()
+}
+
+func (n *RaftNode) IsLeader() bool {
+	return n.Raft.State() == raft.Leader
+}
