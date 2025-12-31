@@ -28,4 +28,10 @@ RUN mkdir -p /app/raft_data
 EXPOSE 8000
 
 # Run the server
+# Run the server
 CMD ["./server", "-bootstrap"]
+
+# OCI Labels
+LABEL org.opencontainers.image.source=https://github.com/ichbingautam/distributed-cache-service
+LABEL org.opencontainers.image.description="Distributed Cache Service"
+LABEL org.opencontainers.image.licenses=MIT
