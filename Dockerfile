@@ -28,4 +28,4 @@ RUN mkdir -p /app/raft_data
 EXPOSE 8000
 
 # Run the server
-CMD ["./server"]
+CMD ["./server", "-bootstrap"]
