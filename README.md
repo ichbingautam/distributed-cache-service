@@ -135,6 +135,14 @@ Designed to prevent **Data Skew** in the Consistent Hashing ring.
 *   **Low Virtual Node Count** (e.g., `1`): If `node1` is adjacent to `node2` on the ring and `node2` leaves, `node1` might instantly inherit 50% of the traffic, causing a cascading failure (Hot Spot).
 *   **Node Failure**: In a sharded setup (future), losing a physical node means losing 100 small segments. This spreads the recovery load across **all** remaining nodes rather than hammering just one neighbor.
 
+#### Ring Rebalancing (Join Event)
+When a new node (e.g., `Node 4`) joins the ring:
+1.  **Token Generation**: It generates 100 random tokens (Virtual Nodes).
+2.  **Insertion**: These tokens are placed at random points on the Ring.
+3.  **Load Stealing**: The new node takes ownership of keys that fall *just before* its new tokens.
+4.  **Impact**: It "steals" a small amount of data from `Node 1`, a small amount from `Node 2`, and `Node 3`.
+5.  **Result**: The new node instantly shares ~1/4th of the total load, with minimal data movement (only strictly necessary keys move).
+
 ### 3. Dynamic Membership (Joiner Mode)
 The cluster does not require a static config. Nodes join dynamically via the Raft API.
 
