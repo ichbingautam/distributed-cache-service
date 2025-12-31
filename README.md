@@ -192,27 +192,82 @@ curl "http://localhost:8080/set?key=hello&value=world"
 curl "http://localhost:8080/get?key=hello"
 ```
 
-## Sequence Diagram: Write Operation
+## Sequence Diagrams
+
+### 1. Write Flow (Strong Consistency)
+*Valid for `Set`, `Delete`, and `Join` operations.*
 
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Leader
-    participant Follower1
-    participant Follower2
+    participant API as API (gRPC/HTTP)
+    participant Service
+    participant Raft
     participant FSM
     participant Store
+    participant Metrics as Prometheus Helpers
 
-    Client->>Leader: HTTP /set?key=A&value=1
-    Leader->>Leader: Create Log Entry
-    Leader->>Follower1: AppendEntries(A=1)
-    Leader->>Follower2: AppendEntries(A=1)
-    Follower1-->>Leader: Acknowledge
-    Follower2-->>Leader: Acknowledge
-    Leader->>Leader: Commit Log
-    Leader->>FSM: Apply(A=1)
-    FSM->>Store: Set("A", "1")
-    Leader-->>Client: 200 OK "ok"
+    Client->>API: Set(Key, Value)
+    API->>Service: Set(Key, Value)
+    Service->>Metrics: Start Timer
+    Service->>Raft: Apply(Command)
+
+    par Raft Replication
+        Raft->>Raft: Append Log
+        Raft->>Followers: AppendEntries
+        Followers-->>Raft: Ack
+    end
+
+    Raft->>Raft: Commit
+    Raft->>FSM: Apply(Command)
+    FSM->>Store: Store.Set()
+
+    Service->>Metrics: Inc "cache_operations_total"
+    Service->>Metrics: Observe "cache_duration_seconds"
+    Service-->>API: returns nil (success)
+    API-->>Client: 200 OK / gRPC Success
+```
+
+### 2. Read Flow (Eventual Consistency)
+*Demonstrates **SingleFlight** (Request Coalescing) and **Observability**.*
+
+```mermaid
+sequenceDiagram
+    participant ClientA
+    participant ClientB
+    participant Service
+    participant SF as SingleFlight Group
+    participant Store
+    participant Metrics
+
+    par Concurrent Requests
+        ClientA->>Service: Get(Key 1)
+        ClientB->>Service: Get(Key 1)
+    end
+
+    Service->>Metrics: Start Timer (Req A)
+    Service->>Metrics: Start Timer (Req B)
+
+    note right of Service: SingleFlight coalesces duplicate keys
+    Service->>SF: Do("Key 1", fn)
+
+    activate SF
+    SF->>Store: Get(Key 1)
+    Store-->>SF: Return Value / Error
+    deactivate SF
+
+    SF-->>Service: Return Result (to A)
+    SF-->>Service: Return Result (to B)
+
+    par Metrics Recording
+        Service->>Metrics: Inc "cache_hits_total" (A)
+        Service->>Metrics: Observe Latency (A)
+        Service->>Metrics: Inc "cache_hits_total" (B)
+        Service->>Metrics: Observe Latency (B)
+    end
+
+    Service-->>ClientA: Value
+    Service-->>ClientB: Value
 ```
 
 ## Running Tests
