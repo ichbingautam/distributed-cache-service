@@ -293,4 +293,34 @@ Achieving 10 Million Requests Per Second requires evolving this MVP with the fol
 
 5.  **Hot Key Handling**:
     - Implement **Local Caching** (Near Cache) on the client side for extremely hot keys.
-    - Use "Shadow Replicas" to serve reads for hot keys from more nodes than just the consensus group.
+## Contributing and Guardrails
+
+To ensure code quality and stability, this project enforces strict development guardrails.
+
+### 1. Local Checkpoint (Pre-Commit Hooks)
+We use `pre-commit` to catch errors before they are committed.
+
+**Setup:**
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+Now, every `git commit` will automatically run:
+- Formatting (`gofmt`)
+- Linting (`golangci-lint`)
+- Unit Tests
+- `go vet`
+
+### 2. Remote Checkpoint (Branch Protection)
+The "main" branch is protected. Pull Requests cannot be merged unless:
+1.  **CI Pipeline Passes**: The GitHub Actions workflow (`Quality Check`, `Security Audit`, `Test & Build`) must succeed.
+2.  **Code Owner Review**: (Optional) Approval from a maintainer is required.
+
+**How to Configure (Repo Admin):**
+1.  Go to `Settings` -> `Branches`.
+2.  Click `Add rule` for `main`.
+3.  Check:
+    - `Require status checks to pass before merging`.
+    - Search and select: `Quality Check`, `Security Audit`, `Test & Build`.
+    - `Require a pull request before merging`.
