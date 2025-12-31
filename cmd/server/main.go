@@ -209,7 +209,9 @@ func main() {
 	// Health Check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
 	})
 
 	// Prometheus Metrics
