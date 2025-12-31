@@ -41,6 +41,7 @@ type MockConsensus struct{}
 func (m *MockConsensus) Apply(cmd []byte) error         { return nil }
 func (m *MockConsensus) AddVoter(id, addr string) error { return nil }
 func (m *MockConsensus) IsLeader() bool                 { return true }
+func (m *MockConsensus) VerifyLeader() error            { return nil }
 
 func TestService_Get_Concurrency(t *testing.T) {
 	mockStore := &MockStore{

@@ -37,4 +37,6 @@ type Consensus interface {
 	AddVoter(id, addr string) error
 	// IsLeader checks if the current node is the cluster leader.
 	IsLeader() bool
+	// VerifyLeader checks if the current node is the leader and can serve consistent reads.
+	VerifyLeader() error
 }

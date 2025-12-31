@@ -167,3 +167,7 @@ func (n *RaftNode) AddVoter(id, addr string) error {
 func (n *RaftNode) IsLeader() bool {
 	return n.Raft.State() == raft.Leader
 }
+
+func (n *RaftNode) VerifyLeader() error {
+	return n.Raft.VerifyLeader().Error()
+}

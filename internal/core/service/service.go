@@ -50,15 +50,22 @@ type Command struct {
 
 // Get retrieves a value from the local store.
 //
-// Consistency Level: Eventual (Read-From-Any).
-// - Calls to Get do not go through Raft; they read directly from the node's local FSM state.
-// - If strong consistency is required, a ReadIndex or Leader-process mechanism is needed (future work).
+// Consistency Level: Strong (Linearizable Read).
+// - Calls to Get verify leadership before reading from the local FSM state.
+// - This ensures the node is the current leader and has the latest committed state.
 //
 // Concurrency:
 // - Uses SingleFlight to prevent cache stampedes (Thundering Herd).
 // - Multiple concurrent requests for the same key are coalesced into a single lookup.
 func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
 	start := time.Now()
+
+	// Ensure Strong Consistency: Check if we are still the leader
+	if err := s.consensus.VerifyLeader(); err != nil {
+		observability.CacheOperationsTotal.WithLabelValues("get", "error").Inc()
+		return "", fmt.Errorf("consistency check failed: %w", err)
+	}
+
 	// Use SingleFlight to coalesce concurrent requests for the same key
 	v, err, _ := s.requestGroup.Do(key, func() (interface{}, error) {
 		val, found := s.store.Get(key)
