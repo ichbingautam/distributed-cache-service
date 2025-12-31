@@ -245,6 +245,31 @@ go tool pprof http://localhost:8080/debug/pprof/heap
 go tool pprof http://localhost:8080/debug/pprof/block
 ```
 
+## gRPC Support (Planned/Proto Definitions)
+
+The project includes Protocol Buffers definitions in `proto/cache.proto` to support future gRPC implementation.
+
+### Why Protocol Buffers?
+Using specific Proto definitions offers significant advantages over JSON/HTTP:
+
+1.  **Strict Type Safety**: Ensures contracts between clients and servers are respected at compile time, reducing runtime errors.
+2.  **High Performance**: Binary serialization is significantly smaller and faster to parse than JSON, which is critical for high-throughput caching systems.
+3.  **Language Interoperability**: Protobuf allows generating client code in almost any language (C++, Java, Python, Rust) from the same definition.
+4.  **Backward Compatibility**: Fields can be added or deprecated without breaking existing clients.
+
+### Service Definition
+The `CacheService` defines the following RPC methods:
+- `Get(GetRequest) returns (GetResponse)`: Retrieve value by key.
+- `Set(SetRequest) returns (SetResponse)`: Store value with TTL.
+- `Delete(DeleteRequest) returns (DeleteResponse)`: Remove value.
+
+### Generating Go Code
+To generate the Go code from the proto definitions, install `protoc` and the Go plugins, then run:
+
+```bash
+protoc --go_out=. --go_grpc_out=. proto/cache.proto
+```
+
 ## Path to 10M RPS (Scaling Strategy)
 
 Achieving 10 Million Requests Per Second requires evolving this MVP with the following architectural optimizations:
