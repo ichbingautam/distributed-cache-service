@@ -315,7 +315,7 @@ Now, every `git commit` will automatically run:
 
 ### 2. Remote Checkpoint (Branch Protection)
 The "main" branch is protected. Pull Requests cannot be merged unless:
-1.  **CI Pipeline Passes**: The GitHub Actions workflow (`Quality Check`, `Security Audit`, `Test & Build`) must succeed.
+1.  **CI Pipeline Passes**: The `CI Success` status check must succeed. This check aggregates all quality, security, and test jobs.
 2.  **Code Owner Review**: (Optional) Approval from a maintainer is required.
 
 **How to Configure (Repo Admin):**
@@ -323,5 +323,5 @@ The "main" branch is protected. Pull Requests cannot be merged unless:
 2.  Click `Add rule` for `main`.
 3.  Check:
     - `Require status checks to pass before merging`.
-    - Search and select: `Quality Check`, `Security Audit`, `Test & Build`.
+    - Search and select: `CI Success`.
     - `Require a pull request before merging`.

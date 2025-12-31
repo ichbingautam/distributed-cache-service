@@ -1,0 +1,7 @@
+# Default owner for everything
+* @ichbingautam
+
+# Component specific owners (examples)
+# *.go @ichbingautam
+# Dockerfile @ichbingautam
+# .github/ @ichbingautam
