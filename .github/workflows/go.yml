@@ -102,3 +102,20 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [test-build]
+    if: always()
+    steps:
+      - name: Verify Success
+        run: |
+          # Check if the needed jobs succeeded
+          if [[ "${{ needs.test-build.result }}" == "success" ]]; then
+            echo "All critical CI checks passed."
+            exit 0
+          else
+            echo "CI Failed."
+            exit 1
+          fi
