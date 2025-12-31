@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: distributed-cache-service
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /get?key=healthcheck
+    envVars:
+      - key: PORT
+        value: "10000"

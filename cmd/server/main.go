@@ -28,6 +28,11 @@ func main() {
 	)
 	flag.Parse()
 
+	// Check environment variable for PORT (e.g., Render)
+	if port := os.Getenv("PORT"); port != "" {
+		*httpAddr = ":" + port
+	}
+
 	// Ensure raft storage directory exists
 	os.MkdirAll(*raftDir, 0700)
 

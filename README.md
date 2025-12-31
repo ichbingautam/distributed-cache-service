@@ -104,7 +104,17 @@ The server accepts the following command-line flags:
    kubectl logs cache-node-0
    ```
 
-### Local Development
+### Deployment: Render (Free Tier)
+
+**Render** offers a free tier for Web Services, but it does **not** support persistent disks on the free plan. This means if the service restarts, **data will be lost**. Use this only for stateless demos.
+
+**Steps:**
+1.  Push this code to a GitHub repository.
+2.  Sign up at [render.com](https://render.com).
+3.  Click **New +** -> **Blueprint**.
+4.  Connect your repository.
+5.  Render will automatically detect `render.yaml` and deploy.
+
 
 To run a 3-node cluster locally:
 
