@@ -159,7 +159,7 @@ Sets a value for a key. This operation is replicated via Raft.
 - **Response**: `ok` or error message.
 
 ### 2. Get Key
-Retrieves a value. This operation is strongly consistent (read from Leader for simple implementation).
+Retrieves a value. This operation is **strongly consistent** (Linearizable Read). It verifies leadership before returning data to ensure no stale reads occur during partitions.
 
 - **Endpoint**: `GET /get`
 - **Parameters**:
@@ -174,6 +174,26 @@ Adds a new node to the Raft cluster.
   - `node_id`: Unique ID of the new node.
   - `addr`: Raft address of the new node (e.g., `127.0.0.1:11000`).
 - **Response**: `joined` or error message.
+
+## Observability
+
+The service exports Prometheus-compatible metrics at `/metrics`.
+
+### 1. Collected Metrics
+
+| Metric Name | Type | Labels | Description |
+| :--- | :--- | :--- | :--- |
+| `cache_hits_total` | Counter | None | Total number of successful cache lookups. |
+| `cache_misses_total` | Counter | None | Total number of failed cache lookups. |
+| `cache_operations_total` | Counter | `type` (get/set/delete)<br>`status` (success/error) | Total count of all cache operations. |
+| `cache_duration_seconds` | Histogram | `type` (get/set/delete) | Latency distribution of operations. |
+
+### 2. Access Metrics
+You can scrape or view metrics using `curl`:
+
+```bash
+curl http://localhost:8080/metrics
+```
 
 ## Usage Examples
 
