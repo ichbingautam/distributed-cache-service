@@ -185,17 +185,17 @@ To run a 3-node cluster locally:
 
 **Node 1 (Leader):**
 ```bash
-./server -node_id node1 -http_addr :8081 -raft_addr :11001 -raft_dir raft_node1 -bootstrap -consistency eventual
+./server -node_id node1 -http_addr :8081 -raft_addr :11001 -raft_dir raft_node1 -bootstrap -virtual_nodes 100 -consistency eventual
 ```
 
 **Node 2 (Follower):**
 ```bash
-./server -node_id node2 -http_addr :8082 -raft_addr :11002 -raft_dir raft_node2 -join localhost:8081 -consistency eventual
+./server -node_id node2 -http_addr :8082 -raft_addr :11002 -raft_dir raft_node2 -join localhost:8081 -virtual_nodes 100 -consistency eventual
 ```
 
 **Node 3 (Follower):**
 ```bash
-./server -node_id node3 -http_addr :8083 -raft_addr :11003 -raft_dir raft_node3 -join localhost:8081 -consistency eventual
+./server -node_id node3 -http_addr :8083 -raft_addr :11003 -raft_dir raft_node3 -join localhost:8081 -virtual_nodes 100 -consistency eventual
 ```
 
 ## API Documentation
