@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"distributed-cache-service/internal/core/ports"
+	"distributed-cache-service/internal/observability"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -57,14 +58,20 @@ type Command struct {
 // - Uses SingleFlight to prevent cache stampedes (Thundering Herd).
 // - Multiple concurrent requests for the same key are coalesced into a single lookup.
 func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
+	start := time.Now()
 	// Use SingleFlight to coalesce concurrent requests for the same key
 	v, err, _ := s.requestGroup.Do(key, func() (interface{}, error) {
 		val, found := s.store.Get(key)
 		if !found {
+			observability.CacheMissesTotal.Inc()
+			observability.CacheOperationsTotal.WithLabelValues("get", "miss").Inc()
 			return "", fmt.Errorf("key not found")
 		}
+		observability.CacheHitsTotal.Inc()
+		observability.CacheOperationsTotal.WithLabelValues("get", "hit").Inc()
 		return val, nil
 	})
+	observability.CacheDurationSeconds.WithLabelValues("get").Observe(time.Since(start).Seconds())
 
 	if err != nil {
 		return "", err
@@ -73,9 +80,13 @@ func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
 	return v.(string), nil
 }
 
-// Set replicates a Set command via the consensus layer.
-// This operation is strongly consistent (linearizable) as it goes through Raft log.
+// Set stores a value in the system (Strongly Consistent via Raft).
 func (s *ServiceImpl) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+	start := time.Now()
+	defer func() {
+		observability.CacheDurationSeconds.WithLabelValues("set").Observe(time.Since(start).Seconds())
+	}()
+
 	cmd := Command{
 		Op:    SetOp,
 		Key:   key,
@@ -85,14 +96,25 @@ func (s *ServiceImpl) Set(ctx context.Context, key, value string, ttl time.Durat
 
 	data, err := json.Marshal(cmd)
 	if err != nil {
+		observability.CacheOperationsTotal.WithLabelValues("set", "error").Inc()
 		return err
 	}
 
-	return s.consensus.Apply(data)
+	if err := s.consensus.Apply(data); err != nil {
+		observability.CacheOperationsTotal.WithLabelValues("set", "error").Inc()
+		return err
+	}
+	observability.CacheOperationsTotal.WithLabelValues("set", "success").Inc()
+	return nil
 }
 
-// Delete replicates a Delete command via the consensus layer.
+// Delete removes a value from the system (Strongly Consistent via Raft).
 func (s *ServiceImpl) Delete(ctx context.Context, key string) error {
+	start := time.Now()
+	defer func() {
+		observability.CacheDurationSeconds.WithLabelValues("delete").Observe(time.Since(start).Seconds())
+	}()
+
 	cmd := Command{
 		Op:  DeleteOp,
 		Key: key,
@@ -100,10 +122,16 @@ func (s *ServiceImpl) Delete(ctx context.Context, key string) error {
 
 	data, err := json.Marshal(cmd)
 	if err != nil {
+		observability.CacheOperationsTotal.WithLabelValues("delete", "error").Inc()
 		return err
 	}
 
-	return s.consensus.Apply(data)
+	if err := s.consensus.Apply(data); err != nil {
+		observability.CacheOperationsTotal.WithLabelValues("delete", "error").Inc()
+		return err
+	}
+	observability.CacheOperationsTotal.WithLabelValues("delete", "success").Inc()
+	return nil
 }
 
 // Join adds a new node to the cluster by invoking the consensus layer.

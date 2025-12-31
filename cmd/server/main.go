@@ -18,15 +18,16 @@ import (
 	_ "net/http/pprof" // Register pprof handlers
 
 	"github.com/hashicorp/raft"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 
 	// Added for raft-boltdb
-
 	grpcAdapter "distributed-cache-service/internal/grpc"
 	pb "distributed-cache-service/proto"
 )
 
 func main() {
+	// ... existing flags ...
 	var (
 		nodeID      = flag.String("node_id", "node1", "Node ID")
 		httpAddr    = flag.String("http_addr", ":8080", "HTTP Server address")
@@ -204,6 +205,17 @@ func main() {
 			log.Printf("Failed to write response: %v", err)
 		}
 	})
+
+	// Health Check
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("ok")); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
+	})
+
+	// Prometheus Metrics
+	http.Handle("/metrics", promhttp.Handler())
 
 	// -------------------------------------------------------------------------
 	// 5. gRPC Server Start

@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 2s
+  scrape_timeout: 1s
+
+scrape_configs:
+  - job_name: "distributed-cache"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["distributed-cache-service:8000"]

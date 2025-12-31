@@ -4,7 +4,42 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /get?key=healthcheck
+    healthCheckPath: /health
     envVars:
       - key: PORT
         value: "8000"
+
+  - type: pserv
+    name: prometheus
+    runtime: docker
+    plan: free
+    dockerContext: ./deploy
+    dockerfilePath: ./deploy/Dockerfile.prometheus
+    envVars:
+      - key: PORT
+        value: "9090"
+
+  - type: web
+    name: grafana
+    runtime: docker
+    plan: free
+    image: grafana/grafana:latest
+    envVars:
+      - key: GF_SECURITY_ADMIN_PASSWORD
+        generateValue: true
+      - key: GF_SERVER_HTTP_PORT
+        value: "3000"
+      - key: PORT
+        value: "3000"
+
+# Replicating Workflow: Preview Environments for PRs
+previewEnvironments:
+  - name: pr-preview
+    fromServices:
+      - type: web
+        name: distributed-cache-service
+        # We can override plan or env vars here if needed
+        plan: free
+    envVars:
+      - key: IS_PREVIEW
+        value: "true"
