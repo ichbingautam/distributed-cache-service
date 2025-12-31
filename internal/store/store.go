@@ -5,6 +5,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"distributed-cache-service/internal/store/policy"
 )
 
 // Item represents a single cached value with its metadata.
@@ -16,23 +18,49 @@ type Item struct {
 // Store implements a thread-safe in-memory key-value cache.
 // It supports TTL-based expiration and basic CRUD operations.
 type Store struct {
-	mu    sync.RWMutex
-	items map[string]*Item
+	mu       sync.RWMutex
+	items    map[string]*Item
+	capacity int
+	policy   policy.EvictionPolicy
 }
 
-// New creates a new, empty Store instance.
-func New() *Store {
-	return &Store{
-		items: make(map[string]*Item),
+// Option defines a functional option for configuring the store.
+type Option func(*Store)
+
+// WithCapacity sets the maximum number of items in the store.
+func WithCapacity(capacity int) Option {
+	return func(s *Store) {
+		s.capacity = capacity
 	}
+}
+
+// WithPolicy sets the eviction policy.
+func WithPolicy(p policy.EvictionPolicy) Option {
+	return func(s *Store) {
+		s.policy = p
+	}
+}
+
+// New creates a new, empty Store instance with optional configuration.
+// Default capacity is 0 (unlimited) and policy is nil (no eviction).
+func New(opts ...Option) *Store {
+	s := &Store{
+		items:    make(map[string]*Item),
+		capacity: 0,               // Default unlimited
+		policy:   policy.NewLRU(), // Default LRU if capacity set? Or just nil.
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Get retrieves the value associated with the given key.
 // It returns the value and true if the key exists and has not expired.
 // If the key is not found or has expired, it returns an empty string and false.
 func (s *Store) Get(key string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock() // Lock for policy update
+	defer s.mu.Unlock()
 
 	item, found := s.items[key]
 	if !found {
@@ -40,7 +68,14 @@ func (s *Store) Get(key string) (string, bool) {
 	}
 
 	if item.Expiration > 0 && time.Now().UnixNano() > item.Expiration {
+		// Lazy deletion? Or just return not found.
+		// If we return not found, we should probably delete it or let cleanup handle it.
+		// Policy OnAccess should probably NOT be called if expired.
 		return "", false
+	}
+
+	if s.policy != nil {
+		s.policy.OnAccess(key)
 	}
 
 	return item.Value, true
@@ -51,6 +86,25 @@ func (s *Store) Get(key string) (string, bool) {
 func (s *Store) Set(key, value string, ttl time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Check if update
+	if _, exists := s.items[key]; exists {
+		if s.policy != nil {
+			s.policy.OnAccess(key)
+		}
+	} else {
+		// New item
+		// Evict if full
+		if s.capacity > 0 && len(s.items) >= s.capacity && s.policy != nil {
+			victim := s.policy.SelectVictim()
+			if victim != "" {
+				s.deleteInternal(victim)
+			}
+		}
+		if s.policy != nil {
+			s.policy.OnAdd(key)
+		}
+	}
 
 	expiration := int64(0)
 	if ttl > 0 {
@@ -68,7 +122,16 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 func (s *Store) Delete(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.items, key)
+	s.deleteInternal(key)
+}
+
+func (s *Store) deleteInternal(key string) {
+	if _, exists := s.items[key]; exists {
+		delete(s.items, key)
+		if s.policy != nil {
+			s.policy.OnRemove(key)
+		}
+	}
 }
 
 // StartCleanup starts a background goroutine that periodically removes expired items.

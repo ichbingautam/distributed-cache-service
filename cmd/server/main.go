@@ -7,27 +7,31 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings" // Added for strings.ToLower
 	"time"
 
 	"distributed-cache-service/internal/consensus"
 	"distributed-cache-service/internal/core/service"
 	"distributed-cache-service/internal/store"
+	"distributed-cache-service/internal/store/policy" // Added for eviction policies
 
 	_ "net/http/pprof" // Register pprof handlers
 
 	"github.com/hashicorp/raft"
+	// Added for raft-boltdb
 )
 
 func main() {
 	var (
-		nodeID   = flag.String("node_id", "node1", "Node ID")
-		httpAddr = flag.String("http_addr", ":8080", "HTTP Server address")
-
-		raftAddr  = flag.String("raft_addr", ":11000", "Raft communication address")
-		raftAdv   = flag.String("raft_advertise", "", "Advertised Raft address (defaults to local IP if raft_addr is generic)")
-		raftDir   = flag.String("raft_dir", "raft_data", "Raft data directory")
-		bootstrap = flag.Bool("bootstrap", false, "Bootstrap the cluster (only for the first node)")
-		joinAddr  = flag.String("join", "", "Address of the leader to join")
+		nodeID      = flag.String("node_id", "node1", "Node ID")
+		httpAddr    = flag.String("http_addr", ":8080", "HTTP Server address")
+		raftAddr    = flag.String("raft_addr", ":11000", "Raft communication address")
+		raftAdv     = flag.String("raft_advertise", "", "Advertised Raft address (defaults to local IP if raft_addr is generic)")
+		raftDir     = flag.String("raft_dir", "raft_data", "Raft data directory")
+		bootstrap   = flag.Bool("bootstrap", false, "Bootstrap the cluster (only for the first node)")
+		joinAddr    = flag.String("join", "", "Address of the leader to join")
+		maxItems    = flag.Int("max_items", 0, "Maximum number of items in the cache (0 = unlimited)")
+		evictionPol = flag.String("eviction_policy", "lru", "Eviction policy: lru, fifo, lfu, random, none")
 	)
 	flag.Parse()
 
@@ -39,8 +43,33 @@ func main() {
 	// Ensure raft storage directory exists
 	os.MkdirAll(*raftDir, 0700)
 
+	// Configure Store with options
+	var storeOpts []store.Option
+	if *maxItems > 0 {
+		storeOpts = append(storeOpts, store.WithCapacity(*maxItems))
+		var p policy.EvictionPolicy
+		switch strings.ToLower(*evictionPol) {
+		case "lru":
+			p = policy.NewLRU()
+		case "fifo":
+			p = policy.NewFIFO()
+		case "lfu":
+			p = policy.NewLFU()
+		case "random":
+			p = policy.NewRandom()
+		case "none":
+			p = nil
+		default:
+			log.Printf("Unknown eviction policy '%s', defaulting to LRU", *evictionPol)
+			p = policy.NewLRU()
+		}
+		if p != nil {
+			storeOpts = append(storeOpts, store.WithPolicy(p))
+		}
+	}
+
 	// Initialize Store and FSM
-	kvStore := store.New()
+	kvStore := store.New(storeOpts...)
 	fsm := consensus.NewFSM(kvStore)
 
 	// Determine advertise address

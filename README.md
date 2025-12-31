@@ -84,6 +84,17 @@ The server accepts the following command-line flags:
 | `-raft_dir`       | `raft_data`  | Directory to store Raft data (logs/snapshots).   |
 | `-bootstrap`      | `false`      | Set to `true` to bootstrap a new cluster (leader).|
 | `-join`           | `""`         | Address of an existing leader to join.           |
+| `-max_items`      | `0`          | Max items in cache `(0 = unlimited)`.            |
+| `-eviction_policy`| `lru`        | Policy: `lru`, `fifo`, `lfu`, `random`.          |
+
+## Eviction Policies
+
+When `max_items` is set, the cache enforces capacity limits using the selected policy:
+
+1.  **LRU (Least Recently Used)**: Default. Evicts items that haven't been accessed for the longest time. Best for general-purpose caching.
+2.  **FIFO (First-In-First-Out)**: Evicts the oldest added items first. Good when data access patterns don't matter.
+3.  **LFU (Least Frequently Used)**: Evicts items with the lowest access frequency. Ideal for keeping popular items.
+4.  **Random**: Evicts a random item. Lowest CPU/Memory overhead, suitable for very large datasets where approximation is acceptable.
 
 ## Deployment
 
