@@ -1,6 +1,6 @@
 module distributed-cache-service
 
-go 1.24.2
+go 1.24.11
 
 require (
 	github.com/armon/go-metrics v0.4.1 // indirect
