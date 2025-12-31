@@ -17,6 +17,7 @@ type Item struct {
 
 // Store implements a thread-safe in-memory key-value cache.
 // It supports TTL-based expiration and basic CRUD operations.
+// All public methods are safe for concurrent use.
 type Store struct {
 	mu       sync.RWMutex
 	items    map[string]*Item
@@ -58,9 +59,14 @@ func New(opts ...Option) *Store {
 // Get retrieves the value associated with the given key.
 // It returns the value and true if the key exists and has not expired.
 // If the key is not found or has expired, it returns an empty string and false.
+// It updates the eviction policy (if any) to mark the key as accessed.
 func (s *Store) Get(key string) (string, bool) {
 	s.mu.Lock() // Lock for policy update
 	defer s.mu.Unlock()
+
+	// Implementation note: We use Lock() instead of RLock() because OnAccess updates policy state.
+	// Optimally, we could use RLock first, check existence, RUnlock, then Lock for policy update if needed,
+	// but that introduces race conditions or complexity. For this implementation, simple Lock is safer.
 
 	item, found := s.items[key]
 	if !found {
@@ -83,6 +89,7 @@ func (s *Store) Get(key string) (string, bool) {
 
 // Set adds or updates a key with the provided value and Time-To-Live (TTL).
 // If ttl is 0, the item will never expire.
+// If the store is full, it triggers eviction based on the configured policy.
 func (s *Store) Set(key, value string, ttl time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -137,6 +144,7 @@ func (s *Store) deleteInternal(key string) {
 // StartCleanup starts a background goroutine that periodically removes expired items.
 // The cleanup runs at the specified interval.
 // Note: This function spawns a goroutine and does not provide a way to stop it in this simple implementation.
+// It is intended to be called once at application startup.
 func (s *Store) StartCleanup(interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sync"
 
 	"distributed-cache-service/internal/core/service"
 	"distributed-cache-service/internal/store"
@@ -18,7 +17,6 @@ import (
 // and managing snapshots of the state.
 type FSM struct {
 	store *store.Store
-	mu    sync.Mutex
 }
 
 // NewFSM creates a new FSM instance backed by the provided store.
@@ -77,7 +75,7 @@ func (s *Snapshot) Persist(sink raft.SnapshotSink) error {
 	}()
 
 	if err != nil {
-		sink.Cancel()
+		_ = sink.Cancel()
 		return err
 	}
 

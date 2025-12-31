@@ -3,7 +3,6 @@ package policy
 import (
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -72,21 +71,27 @@ func TestLFUPolicy(t *testing.T) {
 }
 
 func TestRandomPolicy(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	p := NewRandom()
+	// Use a local, deterministic rand source for reproducible tests
+	src := rand.NewSource(42) // Fixed seed for reproducibility
+	r := rand.New(src)
 
-	p.OnAdd("A")
-	p.OnAdd("B")
-	p.OnAdd("C")
+	t.Run("RandomSelection", func(t *testing.T) {
+		p := newRandomWithRand(r)
+		p.OnAdd("A")
+		p.OnAdd("B")
+		p.OnAdd("C")
 
-	// Victim should be one of A, B, C
-	victim := p.SelectVictim()
-	assert.Contains(t, []string{"A", "B", "C"}, victim)
+		// We can't deterministically test which one is evicted without knowing the rand sequence,
+		// but we can ensure it is one of them.
+		victim := p.SelectVictim()
+		assert.Contains(t, []string{"A", "B", "C"}, victim)
 
-	p.OnRemove(victim)
+		// Ensure removed item is gone
+		p.OnRemove(victim)
 
-	// Should not select removed
-	victim2 := p.SelectVictim()
-	assert.NotEqual(t, victim, victim2)
-	assert.Contains(t, []string{"A", "B", "C"}, victim2)
+		// Verify remaining items are still candidates and the removed item is not selected
+		newVictim := p.SelectVictim()
+		assert.NotEqual(t, victim, newVictim)
+		assert.Contains(t, []string{"A", "B", "C"}, newVictim) // Still one of the original set
+	})
 }

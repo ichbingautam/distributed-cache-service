@@ -7,9 +7,9 @@ import (
 
 // lfuItem represents an item in the priority queue.
 type lfuItem struct {
-	key       string
-	frequency int
-	index     int // The index of the item in the heap.
+	key       string // The value of the item; arbitrary.
+	frequency int    // The approximate frequency of usage.
+	index     int    // The index of the item in the heap. maintained by the heap.Interface methods.
 }
 
 // PriorityQueue implements heap.Interface and holds Items.
@@ -46,6 +46,8 @@ func (pq *PriorityQueue) Pop() interface{} {
 }
 
 // LFUPolicy implements the Least Frequently Used (LFU) eviction strategy.
+// It uses a Min-Heap (PriorityQueue) to efficiently track and evict the item with the lowest access frequency.
+// operations are generally O(log N).
 type LFUPolicy struct {
 	mu    sync.Mutex
 	pq    PriorityQueue
@@ -60,6 +62,8 @@ func NewLFU() *LFUPolicy {
 	}
 }
 
+// OnAccess increments the frequency of the accessed key.
+// It fixes the heap invariant after the frequency tracking.
 func (p *LFUPolicy) OnAccess(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -69,6 +73,8 @@ func (p *LFUPolicy) OnAccess(key string) {
 	}
 }
 
+// OnAdd registers a new key with an initial frequency of 1.
+// If the key already exists, it acts as an access (increment frequency).
 func (p *LFUPolicy) OnAdd(key string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -94,6 +100,8 @@ func (p *LFUPolicy) OnRemove(key string) {
 	}
 }
 
+// SelectVictim returns the key with the lowest frequency.
+// It peeks at the top of the Min-Heap.
 func (p *LFUPolicy) SelectVictim() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()

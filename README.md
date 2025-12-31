@@ -13,6 +13,7 @@ Designed with **Hexagonal Architecture** (Ports and Adapters), the core business
 *   **Distributed Consistency**: Uses the HashiCorp Raft implementation to ensure strong consistency (Leader-Follower model) and automatic failover.
 *   **Scalable Sharding**: Implements Consistent Hashing with virtual nodes to evenly distribute data and minimize rebalancing noise during scaling events.
 *   **In-Memory Storage**: High-performance, thread-safe in-memory store with support for Time-To-Live (TTL) and automatic expiration.
+*   **Concurrency Safe**: Implements **SingleFlight (Request Coalescing)** to prevent cache stampedes ("Thundering Herd") during high concurrent read pressure.
 *   **Hexagonal Architecture**: Clean separation of concerns using Ports and Adapters to support future upgrades (e.g., swapping HTTP for gRPC or MemoryStore for BadgerDB).
 *   **Production Ready**: Includes Kubernetes manifests for StatefulSet deployment, Docker containerization, and comprehensive metrics/profiling hooks (`pprof`).
 
@@ -91,10 +92,10 @@ The server accepts the following command-line flags:
 
 When `max_items` is set, the cache enforces capacity limits using the selected policy:
 
-1.  **LRU (Least Recently Used)**: Default. Evicts items that haven't been accessed for the longest time. Best for general-purpose caching.
-2.  **FIFO (First-In-First-Out)**: Evicts the oldest added items first. Good when data access patterns don't matter.
-3.  **LFU (Least Frequently Used)**: Evicts items with the lowest access frequency. Ideal for keeping popular items.
-4.  **Random**: Evicts a random item. Lowest CPU/Memory overhead, suitable for very large datasets where approximation is acceptable.
+1.  **LRU (Least Recently Used)**: Default. Evicts items that haven't been accessed for the longest time. Best for general-purpose caching where recent items are most likely to be accessed again.
+2.  **FIFO (First-In-First-Out)**: Evicts the oldest added items first. Useful when access patterns are strictly sequential or data freshness is determined by insertion order.
+3.  **LFU (Least Frequently Used)**: Evicts items with the lowest access frequency. Ideal for keeping "popular" or "hot" items in cache regardless of how recently they were accessed.
+4.  **Random**: Evicts a random item. Lowest CPU/Memory overhead (O(1)), suitable for very large datasets where probabilistic approximation is sufficient.
 
 ## Deployment
 

@@ -33,6 +33,9 @@ func main() {
 		maxItems    = flag.Int("max_items", 0, "Maximum number of items in the cache (0 = unlimited)")
 		evictionPol = flag.String("eviction_policy", "lru", "Eviction policy: lru, fifo, lfu, random, none")
 	)
+	// -------------------------------------------------------------------------
+	// 1. Parsing Configuration
+	// -------------------------------------------------------------------------
 	flag.Parse()
 
 	// Check environment variable for PORT (e.g., Render)
@@ -40,8 +43,9 @@ func main() {
 		*httpAddr = ":" + port
 	}
 
-	// Ensure raft storage directory exists
-	os.MkdirAll(*raftDir, 0700)
+	if err := os.MkdirAll(*raftDir, 0700); err != nil {
+		log.Fatalf("Failed to create raft directory: %v", err)
+	}
 
 	// Configure Store with options
 	var storeOpts []store.Option
@@ -68,6 +72,9 @@ func main() {
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// 2. Core Domain & Storage Setup
+	// -------------------------------------------------------------------------
 	// Initialize Store and FSM
 	kvStore := store.New(storeOpts...)
 	fsm := consensus.NewFSM(kvStore)
@@ -100,6 +107,9 @@ func main() {
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// 3. Raft Consensus Setup
+	// -------------------------------------------------------------------------
 	// Setup Raft
 	raftSys, err := consensus.SetupRaft(*raftDir, *nodeID, bindAddr, advertiseAddr, fsm)
 	if err != nil {
@@ -131,6 +141,9 @@ func main() {
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// 4. HTTP API & Server Start
+	// -------------------------------------------------------------------------
 	// HTTP handlers
 	http.HandleFunc("/set", func(w http.ResponseWriter, r *http.Request) {
 		key := r.URL.Query().Get("key")
@@ -146,7 +159,9 @@ func main() {
 			return
 		}
 
-		w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
 	})
 
 	http.HandleFunc("/get", func(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +176,9 @@ func main() {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		w.Write([]byte(val))
+		if _, err := w.Write([]byte(val)); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
 	})
 
 	http.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
@@ -177,13 +194,17 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Write([]byte("joined"))
+		if _, err := w.Write([]byte("joined")); err != nil {
+			log.Printf("Failed to write response: %v", err)
+		}
 	})
 
 	log.Printf("Server listening on %s (Raft: %s)...", *httpAddr, *raftAddr)
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
 }
 
+// joinCluster sends a request to an existing node to add this node to the cluster.
+// It hits the /join endpoint of the target leader.
 func joinCluster(nodeID, raftAddr, joinAddr string) error {
 	url := fmt.Sprintf("http://%s/join?node_id=%s&addr=%s", joinAddr, nodeID, raftAddr)
 	client := http.Client{Timeout: 5 * time.Second}
@@ -199,6 +220,7 @@ func joinCluster(nodeID, raftAddr, joinAddr string) error {
 	return nil
 }
 
+// getLocalIP returns the first non-loopback private IP address of the machine.
 func getLocalIP() (string, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {

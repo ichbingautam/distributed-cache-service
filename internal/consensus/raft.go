@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -56,10 +57,10 @@ func (l *RaftListener) Accept() (net.Conn, error) {
 		}
 
 		// Set a short read deadline to peek at the first byte
-		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 		peek := make([]byte, 1)
 		n, err := conn.Read(peek)
-		conn.SetReadDeadline(time.Time{}) // Reset deadline
+		_ = conn.SetReadDeadline(time.Time{}) // Reset deadline
 
 		if err != nil {
 			conn.Close()
@@ -79,7 +80,9 @@ func (l *RaftListener) Accept() (net.Conn, error) {
 		b := peek[0]
 		if b == 'G' || b == 'H' || b == 'P' || b == 'C' || b == 'O' || b == 'D' {
 			// It is likely HTTP. Respond with 200 OK
-			conn.Write([]byte("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok"))
+			if _, err := conn.Write([]byte("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 2\r\n\r\nok")); err != nil {
+				log.Printf("Failed to write to connection: %v", err)
+			}
 			conn.Close()
 			continue // Drop this connection, don't return to Raft
 		}

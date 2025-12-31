@@ -2,11 +2,12 @@ package service
 
 import (
 	"context"
+	"distributed-cache-service/internal/core/ports"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"distributed-cache-service/internal/core/ports"
+	"golang.org/x/sync/singleflight"
 )
 
 // ensure implementation
@@ -14,9 +15,12 @@ var _ ports.CacheService = (*ServiceImpl)(nil)
 
 // ServiceImpl implements the CacheService interface.
 // It orchestrates interactions between the storage (Read) and consensus (Write) layers.
+// It manages data consistency and request concurrency.
 type ServiceImpl struct {
 	store     ports.Storage
 	consensus ports.Consensus
+	// requestGroup handles single-flight request coalescing for hot keys.
+	requestGroup singleflight.Group
 }
 
 // New creates a new instance of the cache service.
@@ -35,6 +39,7 @@ const (
 	DeleteOp CommandType = "DELETE"
 )
 
+// Command represents a state machine command to be replicated via Raft.
 type Command struct {
 	Op    CommandType   `json:"op"`
 	Key   string        `json:"key"`
@@ -43,16 +48,29 @@ type Command struct {
 }
 
 // Get retrieves a value from the local store.
-// Note: This operation is eventually consistent (read-from-any).
-// For strong consistency, it should be routed to the leader or use ReadIndex.
+//
+// Consistency Level: Eventual (Read-From-Any).
+// - Calls to Get do not go through Raft; they read directly from the node's local FSM state.
+// - If strong consistency is required, a ReadIndex or Leader-process mechanism is needed (future work).
+//
+// Concurrency:
+// - Uses SingleFlight to prevent cache stampedes (Thundering Herd).
+// - Multiple concurrent requests for the same key are coalesced into a single lookup.
 func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
-	// For strong consistency, we could check if we are leader or read through consensus.
-	// For high throughput/lower latency, we read from local store (eventual consistency if follower).
-	val, found := s.store.Get(key)
-	if !found {
-		return "", fmt.Errorf("key not found")
+	// Use SingleFlight to coalesce concurrent requests for the same key
+	v, err, _ := s.requestGroup.Do(key, func() (interface{}, error) {
+		val, found := s.store.Get(key)
+		if !found {
+			return "", fmt.Errorf("key not found")
+		}
+		return val, nil
+	})
+
+	if err != nil {
+		return "", err
 	}
-	return val, nil
+
+	return v.(string), nil
 }
 
 // Set replicates a Set command via the consensus layer.
