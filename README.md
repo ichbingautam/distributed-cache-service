@@ -28,11 +28,6 @@ Designed with **Hexagonal Architecture** (Ports and Adapters), the core business
 - **Storage**: In-Memory Thread-Safe Map with TTL support.
 - **API**: HTTP (Fallback) / gRPC (Planned).
 
-### Architecture Diagram
-
-```mermaid
-graph TD
-    Client[Client] -->|HTTP/gRPC| API[API Interface]
     subgraph "Core Domain (Hexagonal)"
         API --> Service[Service Layer]
         Service -->|Port| StorePort[Storage Port]
@@ -49,11 +44,22 @@ graph TD
 graph TD
     Keys[Keys: k1, k2, k3] --> Hash[Hash Function]
     Hash --> Ring((Hash Ring))
-    Ring -.->|k1| Node1[Node 1]
-    Ring -.->|k2| Node2[Node 2]
-    Ring -.->|k3| Node3[Node 3]
-    Node1 -.->|Backup| Node2
+
+    subgraph "Consistent Hashing Ring"
+        Ring -.->|k1| V1[Node1_TokenA]
+        Ring -.->|k2| V2[Node2_TokenA]
+        Ring -.->|k3| V3[Node1_TokenB]
+
+        V1 -.->|Map to| Node1[Physical Node 1]
+        V3 -.->|Map to| Node1
+        V2 -.->|Map to| Node2[Physical Node 2]
+    end
 ```
+### Architecture Diagram
+
+```mermaid
+graph TD
+    Client[Client] -->|HTTP/gRPC| API[API Interface]
 
 ## Project Structure
 
