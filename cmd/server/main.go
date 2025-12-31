@@ -44,27 +44,35 @@ func main() {
 	fsm := consensus.NewFSM(kvStore)
 
 	// Determine advertise address
+	// Determine advertise address and bind address
+	var bindAddr string
 	advertiseAddr := *raftAdv
-	if advertiseAddr == "" {
-		host, port, err := net.SplitHostPort(*raftAddr)
-		if err != nil {
-			log.Fatalf("Invalid raft_addr: %v", err)
-		}
 
-		if host == "" || host == "0.0.0.0" {
-			// Resolve local IP
-			addr, err := getLocalIP()
-			if err != nil {
-				log.Fatalf("Could not determine local IP: %v", err)
-			}
-			advertiseAddr = fmt.Sprintf("%s:%s", addr, port)
-		} else {
+	host, port, err := net.SplitHostPort(*raftAddr)
+	if err != nil {
+		log.Fatalf("Invalid raft_addr: %v", err)
+	}
+
+	if host == "" || host == "0.0.0.0" {
+		// Resolve local IP
+		addr, err := getLocalIP()
+		if err != nil {
+			log.Fatalf("Could not determine local IP: %v", err)
+		}
+		// Bind to the specific local IP to avoid unwanted traffic on 0.0.0.0 from LB health checks
+		bindAddr = fmt.Sprintf("%s:%s", addr, port)
+		if advertiseAddr == "" {
+			advertiseAddr = bindAddr
+		}
+	} else {
+		bindAddr = *raftAddr
+		if advertiseAddr == "" {
 			advertiseAddr = *raftAddr
 		}
 	}
 
 	// Setup Raft
-	raftSys, err := consensus.SetupRaft(*raftDir, *nodeID, *raftAddr, advertiseAddr, fsm)
+	raftSys, err := consensus.SetupRaft(*raftDir, *nodeID, bindAddr, advertiseAddr, fsm)
 	if err != nil {
 		log.Fatalf("Failed to setup Raft: %v", err)
 	}
