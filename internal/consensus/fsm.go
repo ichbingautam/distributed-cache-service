@@ -13,18 +13,24 @@ import (
 )
 
 // FSM implements raft.FSM interface
+// FSM (Finite State Machine) implements the raft.FSM interface.
+// It is responsible for applying committed log entries to the underlying key-value store
+// and managing snapshots of the state.
 type FSM struct {
 	store *store.Store
 	mu    sync.Mutex
 }
 
+// NewFSM creates a new FSM instance backed by the provided store.
 func NewFSM(s *store.Store) *FSM {
 	return &FSM{
 		store: s,
 	}
 }
 
-// Apply applies a Raft log entry to the key-value store.
+// Apply applies a committed Raft log entry to the key-value store.
+// It unmarshals the command (Set/Delete) and executes it against the backend store.
+// This method is invoked by the Raft leader after consensus is reached.
 func (f *FSM) Apply(log *raft.Log) interface{} {
 	var c service.Command
 	if err := json.Unmarshal(log.Data, &c); err != nil {

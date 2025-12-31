@@ -16,6 +16,10 @@ import (
 )
 
 // BufferedConn wraps a net.Conn to replay a peeked byte
+// BufferedConn wraps a net.Conn to allow replaying a peeked byte.
+// This is necessary because RaftListener peaks at the first byte to detect HTTP traffic.
+// If the traffic is Raft, the byte is placed into this connection which then behaves normally,
+// yielding the peeked byte on the first Read call.
 type BufferedConn struct {
 	net.Conn
 	peeked []byte
@@ -33,11 +37,17 @@ func (c *BufferedConn) Read(p []byte) (n int, err error) {
 	return c.Conn.Read(p)
 }
 
-// RaftListener intercepts HTTP connections (health checks) and filters them out
+// RaftListener is a custom net.Listener that intercepts incoming connections to peek at the first byte.
+// It is designed to filter out HTTP health checks (which often hit the same port in some deployment environments)
+// while allowing legitimate binary Raft RPC traffic to pass through.
 type RaftListener struct {
 	net.Listener
 }
 
+// Accept accepts the next incoming connection. It reads the first byte to determine the protocol.
+// If the byte indicates an HTTP request ('G', 'H', 'P', etc.), it responds with 200 OK and closes the connection.
+// This prevents 'unknown rpc type' errors in the Raft logs.
+// If the byte indicates binary Raft traffic, it returns a BufferedConn that replays the peeked byte.
 func (l *RaftListener) Accept() (net.Conn, error) {
 	for {
 		conn, err := l.Listener.Accept()
@@ -84,6 +94,16 @@ func (l *RaftListener) Dial(address raft.ServerAddress, timeout time.Duration) (
 }
 
 // SetupRaft initializes and starts a Raft node.
+// SetupRaft initializes and starts a Raft node with the given configuration.
+// It sets up the BoltDB store for logs and snapshots, configures the transport with the custom RaftListener,
+// and bootstraps the Raft instance.
+//
+// Parameters:
+//   - dir: Directory to store Raft data (logs and snapshots).
+//   - nodeId: Unique identifier for this node.
+//   - bindAddr: Address to bind the listener to (should be valid local IP).
+//   - advertiseAddr: Address to advertise to other peers (reachable IP:Port).
+//   - fsm: The Finite State Machine that applies committed log entries.
 func SetupRaft(dir, nodeId, bindAddr, advertiseAddr string, fsm *FSM) (*raft.Raft, error) {
 	// Setup Raft configuration
 	config := raft.DefaultConfig()

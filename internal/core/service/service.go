@@ -12,11 +12,14 @@ import (
 // ensure implementation
 var _ ports.CacheService = (*ServiceImpl)(nil)
 
+// ServiceImpl implements the CacheService interface.
+// It orchestrates interactions between the storage (Read) and consensus (Write) layers.
 type ServiceImpl struct {
 	store     ports.Storage
 	consensus ports.Consensus
 }
 
+// New creates a new instance of the cache service.
 func New(store ports.Storage, consensus ports.Consensus) *ServiceImpl {
 	return &ServiceImpl{
 		store:     store,
@@ -39,6 +42,9 @@ type Command struct {
 	TTL   time.Duration `json:"ttl,omitempty"`
 }
 
+// Get retrieves a value from the local store.
+// Note: This operation is eventually consistent (read-from-any).
+// For strong consistency, it should be routed to the leader or use ReadIndex.
 func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
 	// For strong consistency, we could check if we are leader or read through consensus.
 	// For high throughput/lower latency, we read from local store (eventual consistency if follower).
@@ -49,6 +55,8 @@ func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
 	return val, nil
 }
 
+// Set replicates a Set command via the consensus layer.
+// This operation is strongly consistent (linearizable) as it goes through Raft log.
 func (s *ServiceImpl) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	cmd := Command{
 		Op:    SetOp,
@@ -65,6 +73,7 @@ func (s *ServiceImpl) Set(ctx context.Context, key, value string, ttl time.Durat
 	return s.consensus.Apply(data)
 }
 
+// Delete replicates a Delete command via the consensus layer.
 func (s *ServiceImpl) Delete(ctx context.Context, key string) error {
 	cmd := Command{
 		Op:  DeleteOp,
@@ -79,6 +88,7 @@ func (s *ServiceImpl) Delete(ctx context.Context, key string) error {
 	return s.consensus.Apply(data)
 }
 
+// Join adds a new node to the cluster by invoking the consensus layer.
 func (s *ServiceImpl) Join(ctx context.Context, nodeID, addr string) error {
 	return s.consensus.AddVoter(nodeID, addr)
 }
