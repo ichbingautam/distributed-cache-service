@@ -87,6 +87,8 @@ The server accepts the following command-line flags:
 | `-join`           | `""`         | Address of an existing leader to join.           |
 | `-max_items`      | `0`          | Max items in cache `(0 = unlimited)`.            |
 | `-eviction_policy`| `lru`        | Policy: `lru`, `fifo`, `lfu`, `random`.          |
+| `-virtual_nodes`  | `100`        | Virtual nodes per physical node (Ring distribution).|
+| `-consistency`    | `strong`     | Read consistency: `strong` (CP) or `eventual` (AP).|
 
 ## Eviction Policies
 
@@ -183,17 +185,17 @@ To run a 3-node cluster locally:
 
 **Node 1 (Leader):**
 ```bash
-./server -node_id node1 -http_addr :8081 -raft_addr :11001 -raft_dir raft_node1 -bootstrap
+./server -node_id node1 -http_addr :8081 -raft_addr :11001 -raft_dir raft_node1 -bootstrap -consistency eventual
 ```
 
 **Node 2 (Follower):**
 ```bash
-./server -node_id node2 -http_addr :8082 -raft_addr :11002 -raft_dir raft_node2 -join localhost:8081
+./server -node_id node2 -http_addr :8082 -raft_addr :11002 -raft_dir raft_node2 -join localhost:8081 -consistency eventual
 ```
 
 **Node 3 (Follower):**
 ```bash
-./server -node_id node3 -http_addr :8083 -raft_addr :11003 -raft_dir raft_node3 -join localhost:8081
+./server -node_id node3 -http_addr :8083 -raft_addr :11003 -raft_dir raft_node3 -join localhost:8081 -consistency eventual
 ```
 
 ## API Documentation
@@ -247,9 +249,9 @@ curl http://localhost:8080/metrics
 
 ## Usage Examples
 
-**Start the Server:**
+**Start the Server (Strong Consistency & 100 Virtual Nodes):**
 ```bash
-./server -node_id node1 -http_addr :8080 -raft_addr :11000 -raft_dir raft_node1 -bootstrap
+./server -node_id node1 -http_addr :8080 -raft_addr :11000 -raft_dir raft_node1 -bootstrap -virtual_nodes 100 -consistency strong
 ```
 
 **Write a Value:**
