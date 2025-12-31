@@ -123,14 +123,29 @@ The system implements a **Tunable Consistency** model for *Read Operations*, all
 
 ### 2. Virtual Nodes (`-virtual_nodes`)
 Designed to prevent **Data Skew** in the Consistent Hashing ring.
-*   **Without Virtual Nodes**: One node might get 50% of the key space.
-*   **With 100 Virtual Nodes**: Each node is hashed 100 times, ensuring fair distribution (Standard Deviation of keys per node drops significantly).
-*   *Note: Virtual Nodes are for distribution logic, not to be confused with Raft Replicas (Safety).*
 
-### 3. Dynamic Membership
-The cluster does not require a static config. Nodes join dynamically:
-*   **Bootstrap**: Start the first node with `-bootstrap`.
-*   **Join**: Start other nodes with `-join <leader_addr>`. The leader adds them to the Raft configuration permanently.
+#### Mechanics
+*   **Without Virtual Nodes**: One node might get 50% of the key space.
+*   **With 100 Virtual Nodes**: Each physical node is hashed 100 times (`node1_0` ... `node1_99`), interlacing them on the ring.
+*   **Result**: Even distribution. Standard Deviation of keys per node drops significantly (e.g., from ~30k to ~1k keys variation).
+
+#### Edge Cases
+*   **Low Virtual Node Count** (e.g., `1`): If `node1` is adjacent to `node2` on the ring and `node2` leaves, `node1` might instantly inherit 50% of the traffic, causing a cascading failure (Hot Spot).
+*   **Node Failure**: In a sharded setup (future), losing a physical node means losing 100 small segments. This spreads the recovery load across **all** remaining nodes rather than hammering just one neighbor.
+
+### 3. Dynamic Membership (Joiner Mode)
+The cluster does not require a static config. Nodes join dynamically via the Raft API.
+
+#### Workflow
+1.  **Bootstrap**: Start Server A with `-bootstrap`. It elects itself Leader.
+2.  **Join Request**: Server B starts with `-join <Server A Address>`.
+3.  **Raft Configuration Change**: Server A receives the join request, proposes a `AddVoter` configuration change to the Raft log.
+4.  **Replication**: Once committed, Server B receives the snapshot and current logs, becoming a full voting member.
+
+#### Edge Cases
+*   **Leader Down during Join**: The join request will fail or timeout. The joining node must retry with a Backoff strategy until a new leader is elected.
+*   **Joining a Follower**: Ideally, followers forward the request to the Leader. If not, the joining node receives a "Not Leader" error (and usually a hint about who the leader is).
+*   **Duplicate Join**: Raft handles idempotency. If a node tries to join but is already a member, the operation is a no-op (success).
 
 ## Deployment
 
