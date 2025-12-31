@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -19,9 +20,11 @@ import (
 
 func main() {
 	var (
-		nodeID    = flag.String("node_id", "node1", "Node ID")
-		httpAddr  = flag.String("http_addr", ":8080", "HTTP Server address")
+		nodeID   = flag.String("node_id", "node1", "Node ID")
+		httpAddr = flag.String("http_addr", ":8080", "HTTP Server address")
+
 		raftAddr  = flag.String("raft_addr", ":11000", "Raft communication address")
+		raftAdv   = flag.String("raft_advertise", "", "Advertised Raft address (defaults to local IP if raft_addr is generic)")
 		raftDir   = flag.String("raft_dir", "raft_data", "Raft data directory")
 		bootstrap = flag.Bool("bootstrap", false, "Bootstrap the cluster (only for the first node)")
 		joinAddr  = flag.String("join", "", "Address of the leader to join")
@@ -40,8 +43,28 @@ func main() {
 	kvStore := store.New()
 	fsm := consensus.NewFSM(kvStore)
 
+	// Determine advertise address
+	advertiseAddr := *raftAdv
+	if advertiseAddr == "" {
+		host, port, err := net.SplitHostPort(*raftAddr)
+		if err != nil {
+			log.Fatalf("Invalid raft_addr: %v", err)
+		}
+
+		if host == "" || host == "0.0.0.0" {
+			// Resolve local IP
+			addr, err := getLocalIP()
+			if err != nil {
+				log.Fatalf("Could not determine local IP: %v", err)
+			}
+			advertiseAddr = fmt.Sprintf("%s:%s", addr, port)
+		} else {
+			advertiseAddr = *raftAddr
+		}
+	}
+
 	// Setup Raft
-	raftSys, err := consensus.SetupRaft(*raftDir, *nodeID, *raftAddr, fsm)
+	raftSys, err := consensus.SetupRaft(*raftDir, *nodeID, *raftAddr, advertiseAddr, fsm)
 	if err != nil {
 		log.Fatalf("Failed to setup Raft: %v", err)
 	}
@@ -137,4 +160,20 @@ func joinCluster(nodeID, raftAddr, joinAddr string) error {
 		return fmt.Errorf("failed to join: %s", resp.Status)
 	}
 	return nil
+}
+
+func getLocalIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+	for _, address := range addrs {
+		// check the address type and if it is not a loopback the display it
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String(), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no private IP address found")
 }

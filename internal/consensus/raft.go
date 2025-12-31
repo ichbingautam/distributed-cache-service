@@ -12,14 +12,14 @@ import (
 )
 
 // SetupRaft initializes and starts a Raft node.
-func SetupRaft(dir, nodeId, bindAddr string, fsm *FSM) (*raft.Raft, error) {
+func SetupRaft(dir, nodeId, bindAddr, advertiseAddr string, fsm *FSM) (*raft.Raft, error) {
 	// Setup Raft configuration
 	config := raft.DefaultConfig()
 	config.LocalID = raft.ServerID(nodeId)
 	// config.Logger = hclog.New(&hclog.LoggerOptions{Output: os.Stderr, Level: hclog.Error, Name: "raft"})
 
 	// Setup Raft communication
-	addr, err := net.ResolveTCPAddr("tcp", bindAddr)
+	addr, err := net.ResolveTCPAddr("tcp", advertiseAddr)
 	if err != nil {
 		return nil, err
 	}
