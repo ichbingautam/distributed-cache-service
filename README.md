@@ -100,9 +100,26 @@ When `max_items` is set, the cache enforces capacity limits using the selected p
 ## Advanced Configuration
 
 ### 1. Tunable Consistency (`-consistency`)
-The system offers two consistency modes to balance **CAP theorem** trade-offs:
-*   **Strong (CP)** (`default`): Checks with the Raft Leader before every read. Guarantees no stale data, but reduces availability during partitions.
-*   **Eventual (AP)**: Reads from the local node immediately. Extremely fast and available, but may return stale data if the node is partitioned.
+The system implements a **Tunable Consistency** model for *Read Operations*, allowing operators to choose between consistency and latency based on their requirements (CAP Theorem).
+
+> **Note**: *Write Operations* (`Set`, `Delete`) are **always Strongly Consistent** via Raft Quorum, regardless of this setting.
+
+#### Mode A: Strong Consistency (`strong`) - Default
+*   **Guarantee**: **Linearizability**. Clients are guaranteed to see the latest committed write. Stale reads are impossible.
+*   **Design Mechanism (Read Lease)**:
+    1.  Client sends `Get(Key)` to the Leader.
+    2.  Leader calls `raft.VerifyLeader()`. This triggers a check to confirm it still holds the "Lease" (contact with a majority of nodes).
+    3.  **Prevents Zombie Leaders**: If the Leader is partitioned, `VerifyLeader()` fails, and the request is rejected (500 Error) rather than returning old data.
+    4.  If verified, Leader reads from local FSM.
+*   **Trade-off**: Higher Latency (due to heartbeat check) & Reduced Availability (Fails during partitions).
+
+#### Mode B: Eventual Consistency (`eventual`)
+*   **Guarantee**: **Eventual Consistency**. Reads are fast but may be stale.
+*   **Design Mechanism (Local Read)**:
+    1.  Client sends `Get(Key)` to *any* node (Leader or Follower).
+    2.  Node reads directly from its local in-memory FSM (`memStore`).
+    3.  Returns value immediately without network chatter.
+*   **Trade-off**: Lowest Latency & High Availability (Works even if disconnected from cluster), but risk of Stale Reads (if follower is lagging).
 
 ### 2. Virtual Nodes (`-virtual_nodes`)
 Designed to prevent **Data Skew** in the Consistent Hashing ring.
