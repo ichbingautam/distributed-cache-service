@@ -23,7 +23,7 @@ func TestMetrics_Get(t *testing.T) {
 		data: make(map[string]string),
 	}
 	mockConsensus := &MockConsensus{}
-	svc := New(mockStore, mockConsensus)
+	svc := New(mockStore, mockConsensus, ConsistencyStrong)
 	ctx := context.Background()
 
 	// 2. Test Hit
@@ -56,7 +56,7 @@ func TestMetrics_Set(t *testing.T) {
 		data: make(map[string]string),
 	}
 	mockConsensus := &MockConsensus{}
-	svc := New(mockStore, mockConsensus)
+	svc := New(mockStore, mockConsensus, ConsistencyStrong)
 	ctx := context.Background()
 
 	// MockConsensus.Apply in service_test.go returns nil, which is what we want (success).
@@ -81,7 +81,7 @@ func TestMetrics_Delete(t *testing.T) {
 		data: make(map[string]string),
 	}
 	mockConsensus := &MockConsensus{}
-	svc := New(mockStore, mockConsensus)
+	svc := New(mockStore, mockConsensus, ConsistencyStrong)
 	ctx := context.Background()
 
 	ctr := observability.CacheOperationsTotal.WithLabelValues("delete", "success")

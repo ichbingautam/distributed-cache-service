@@ -12,19 +12,19 @@ type Hash func(data []byte) uint32
 
 // Map contains all hashed keys
 type Map struct {
-	hash     Hash
-	replicas int
-	keys     []int // Sorted
-	hashMap  map[int]string
-	mu       sync.RWMutex
+	hash         Hash
+	virtualNodes int
+	keys         []int // Sorted
+	hashMap      map[int]string
+	mu           sync.RWMutex
 }
 
 // New creates a new Map object
-func New(replicas int, fn Hash) *Map {
+func New(virtualNodes int, fn Hash) *Map {
 	m := &Map{
-		replicas: replicas,
-		hash:     fn,
-		hashMap:  make(map[int]string),
+		virtualNodes: virtualNodes,
+		hash:         fn,
+		hashMap:      make(map[int]string),
 	}
 	if m.hash == nil {
 		m.hash = crc32.ChecksumIEEE
@@ -37,7 +37,7 @@ func (m *Map) Add(keys ...string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, key := range keys {
-		for i := 0; i < m.replicas; i++ {
+		for i := 0; i < m.virtualNodes; i++ {
 			hash := int(m.hash([]byte(strconv.Itoa(i) + key)))
 			m.keys = append(m.keys, hash)
 			m.hashMap[hash] = key

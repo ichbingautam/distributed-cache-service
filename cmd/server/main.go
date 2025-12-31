@@ -12,6 +12,7 @@ import (
 
 	"distributed-cache-service/internal/consensus"
 	"distributed-cache-service/internal/core/service"
+	"distributed-cache-service/internal/sharding"
 	"distributed-cache-service/internal/store"
 	"distributed-cache-service/internal/store/policy" // Added for eviction policies
 
@@ -29,16 +30,18 @@ import (
 func main() {
 	// ... existing flags ...
 	var (
-		nodeID      = flag.String("node_id", "node1", "Node ID")
-		httpAddr    = flag.String("http_addr", ":8080", "HTTP Server address")
-		raftAddr    = flag.String("raft_addr", ":11000", "Raft communication address")
-		raftAdv     = flag.String("raft_advertise", "", "Advertised Raft address (defaults to local IP if raft_addr is generic)")
-		raftDir     = flag.String("raft_dir", "raft_data", "Raft data directory")
-		bootstrap   = flag.Bool("bootstrap", false, "Bootstrap the cluster (only for the first node)")
-		joinAddr    = flag.String("join", "", "Address of the leader to join")
-		maxItems    = flag.Int("max_items", 0, "Maximum number of items in the cache (0 = unlimited)")
-		evictionPol = flag.String("eviction_policy", "lru", "Eviction policy: lru, fifo, lfu, random, none")
-		grpcAddr    = flag.String("grpc_addr", ":50051", "gRPC Server address")
+		nodeID       = flag.String("node_id", "node1", "Node ID")
+		httpAddr     = flag.String("http_addr", ":8080", "HTTP Server address")
+		raftAddr     = flag.String("raft_addr", ":11000", "Raft communication address")
+		raftAdv      = flag.String("raft_advertise", "", "Advertised Raft address (defaults to local IP if raft_addr is generic)")
+		raftDir      = flag.String("raft_dir", "raft_data", "Raft data directory")
+		bootstrap    = flag.Bool("bootstrap", false, "Bootstrap the cluster (only for the first node)")
+		joinAddr     = flag.String("join", "", "Address of the leader to join")
+		maxItems     = flag.Int("max_items", 0, "Maximum number of items in the cache (0 = unlimited)")
+		evictionPol  = flag.String("eviction_policy", "lru", "Eviction policy: lru, fifo, lfu, random, none")
+		grpcAddr     = flag.String("grpc_addr", ":50051", "gRPC Server address")
+		virtualNodes = flag.Int("virtual_nodes", 100, "Number of virtual nodes for consistent hashing")
+		consistency  = flag.String("consistency", "strong", "Consistency mode: strong, eventual")
 	)
 	// -------------------------------------------------------------------------
 	// 1. Parsing Configuration
@@ -82,6 +85,10 @@ func main() {
 	// -------------------------------------------------------------------------
 	// 2. Core Domain & Storage Setup
 	// -------------------------------------------------------------------------
+	// Initialize Sharding Ring (Virtual Nodes)
+	// Note: Currently local-only view, but prepared for Smart Client / Partitioning
+	_ = sharding.New(*virtualNodes, nil)
+
 	// Initialize Store and FSM
 	kvStore := store.New(storeOpts...)
 	fsm := consensus.NewFSM(kvStore)
@@ -123,9 +130,21 @@ func main() {
 		log.Fatalf("Failed to setup Raft: %v", err)
 	}
 
+	// Validate Consistency Mode
+	var consistencyMode service.ConsistencyMode
+	switch strings.ToLower(*consistency) {
+	case "strong":
+		consistencyMode = service.ConsistencyStrong
+	case "eventual":
+		consistencyMode = service.ConsistencyEventual
+	default:
+		log.Printf("Unknown consistency mode '%s', defaulting to strong", *consistency)
+		consistencyMode = service.ConsistencyStrong
+	}
+
 	// Create consensus adapter and service
 	raftNode := &consensus.RaftNode{Raft: raftSys}
-	svc := service.New(kvStore, raftNode)
+	svc := service.New(kvStore, raftNode, consistencyMode)
 
 	// Bootstrap if requested
 	if *bootstrap {

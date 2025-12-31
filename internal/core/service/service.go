@@ -18,17 +18,18 @@ var _ ports.CacheService = (*ServiceImpl)(nil)
 // It orchestrates interactions between the storage (Read) and consensus (Write) layers.
 // It manages data consistency and request concurrency.
 type ServiceImpl struct {
-	store     ports.Storage
-	consensus ports.Consensus
-	// requestGroup handles single-flight request coalescing for hot keys.
+	store        ports.Storage
+	consensus    ports.Consensus
 	requestGroup singleflight.Group
+	consistency  ConsistencyMode
 }
 
 // New creates a new instance of the cache service.
-func New(store ports.Storage, consensus ports.Consensus) *ServiceImpl {
+func New(store ports.Storage, consensus ports.Consensus, consistency ConsistencyMode) *ServiceImpl {
 	return &ServiceImpl{
-		store:     store,
-		consensus: consensus,
+		store:       store,
+		consensus:   consensus,
+		consistency: consistency,
 	}
 }
 
@@ -38,6 +39,14 @@ type CommandType string
 const (
 	SetOp    CommandType = "SET"
 	DeleteOp CommandType = "DELETE"
+)
+
+// ConsistencyMode defines the consistency level for read operations.
+type ConsistencyMode string
+
+const (
+	ConsistencyStrong   ConsistencyMode = "strong"
+	ConsistencyEventual ConsistencyMode = "eventual"
 )
 
 // Command represents a state machine command to be replicated via Raft.
@@ -50,9 +59,9 @@ type Command struct {
 
 // Get retrieves a value from the local store.
 //
-// Consistency Level: Strong (Linearizable Read).
-// - Calls to Get verify leadership before reading from the local FSM state.
-// - This ensures the node is the current leader and has the latest committed state.
+// Consistency Level: Tunable (Strong vs Eventual).
+// - Strong: Verifies leadership (Linearizable).
+// - Eventual: Reads local state immediately.
 //
 // Concurrency:
 // - Uses SingleFlight to prevent cache stampedes (Thundering Herd).
@@ -61,9 +70,11 @@ func (s *ServiceImpl) Get(ctx context.Context, key string) (string, error) {
 	start := time.Now()
 
 	// Ensure Strong Consistency: Check if we are still the leader
-	if err := s.consensus.VerifyLeader(); err != nil {
-		observability.CacheOperationsTotal.WithLabelValues("get", "error").Inc()
-		return "", fmt.Errorf("consistency check failed: %w", err)
+	if s.consistency == ConsistencyStrong {
+		if err := s.consensus.VerifyLeader(); err != nil {
+			observability.CacheOperationsTotal.WithLabelValues("get", "error").Inc()
+			return "", fmt.Errorf("consistency check failed: %w", err)
+		}
 	}
 
 	// Use SingleFlight to coalesce concurrent requests for the same key

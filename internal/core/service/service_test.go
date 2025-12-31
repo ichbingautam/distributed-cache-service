@@ -48,7 +48,7 @@ func TestService_Get_Concurrency(t *testing.T) {
 		data: map[string]string{"key1": "value1"},
 	}
 	mockConsensus := &MockConsensus{}
-	svc := New(mockStore, mockConsensus)
+	svc := New(mockStore, mockConsensus, ConsistencyStrong)
 
 	ctx := context.Background()
 	concurrency := 100

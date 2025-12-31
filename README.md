@@ -97,6 +97,24 @@ When `max_items` is set, the cache enforces capacity limits using the selected p
 3.  **LFU (Least Frequently Used)**: Evicts items with the lowest access frequency. Ideal for keeping "popular" or "hot" items in cache regardless of how recently they were accessed.
 4.  **Random**: Evicts a random item. Lowest CPU/Memory overhead (O(1)), suitable for very large datasets where probabilistic approximation is sufficient.
 
+## Advanced Configuration
+
+### 1. Tunable Consistency (`-consistency`)
+The system offers two consistency modes to balance **CAP theorem** trade-offs:
+*   **Strong (CP)** (`default`): Checks with the Raft Leader before every read. Guarantees no stale data, but reduces availability during partitions.
+*   **Eventual (AP)**: Reads from the local node immediately. Extremely fast and available, but may return stale data if the node is partitioned.
+
+### 2. Virtual Nodes (`-virtual_nodes`)
+Designed to prevent **Data Skew** in the Consistent Hashing ring.
+*   **Without Virtual Nodes**: One node might get 50% of the key space.
+*   **With 100 Virtual Nodes**: Each node is hashed 100 times, ensuring fair distribution (Standard Deviation of keys per node drops significantly).
+*   *Note: Virtual Nodes are for distribution logic, not to be confused with Raft Replicas (Safety).*
+
+### 3. Dynamic Membership
+The cluster does not require a static config. Nodes join dynamically:
+*   **Bootstrap**: Start the first node with `-bootstrap`.
+*   **Join**: Start other nodes with `-join <leader_addr>`. The leader adds them to the Raft configuration permanently.
+
 ## Deployment
 
 ### Kubernetes (Production)
