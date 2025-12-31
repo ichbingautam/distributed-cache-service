@@ -24,8 +24,8 @@ COPY --from=builder /app/server .
 # Create directory for Raft data
 RUN mkdir -p /app/raft_data
 
-# Expose HTTP and Raft ports
-EXPOSE 8080 11000
+# Expose HTTP port
+EXPOSE 8000
 
 # Run the server
 CMD ["./server"]
