@@ -18,7 +18,12 @@ import (
 	_ "net/http/pprof" // Register pprof handlers
 
 	"github.com/hashicorp/raft"
+	"google.golang.org/grpc"
+
 	// Added for raft-boltdb
+
+	grpcAdapter "distributed-cache-service/internal/grpc"
+	pb "distributed-cache-service/proto"
 )
 
 func main() {
@@ -32,6 +37,7 @@ func main() {
 		joinAddr    = flag.String("join", "", "Address of the leader to join")
 		maxItems    = flag.Int("max_items", 0, "Maximum number of items in the cache (0 = unlimited)")
 		evictionPol = flag.String("eviction_policy", "lru", "Eviction policy: lru, fifo, lfu, random, none")
+		grpcAddr    = flag.String("grpc_addr", ":50051", "gRPC Server address")
 	)
 	// -------------------------------------------------------------------------
 	// 1. Parsing Configuration
@@ -198,6 +204,23 @@ func main() {
 			log.Printf("Failed to write response: %v", err)
 		}
 	})
+
+	// -------------------------------------------------------------------------
+	// 5. gRPC Server Start
+	// -------------------------------------------------------------------------
+	// Assuming I fix flag definition separately.
+	go func() {
+		lis, err := net.Listen("tcp", *grpcAddr)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		grpcServer := grpc.NewServer()
+		pb.RegisterCacheServiceServer(grpcServer, grpcAdapter.New(svc))
+		log.Printf("gRPC server listening on %s", *grpcAddr)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
 
 	log.Printf("Server listening on %s (Raft: %s)...", *httpAddr, *raftAddr)
 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
