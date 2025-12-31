@@ -10,8 +10,8 @@ RUN apk add --no-cache git build-base curl
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Install golangci-lint
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.0
+# Install golangci-lint via go install (more robust on Alpine)
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.0
 
 COPY . .
 
