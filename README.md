@@ -13,6 +13,33 @@ High-performance distributed cache in Go using Raft for consensus and Consistent
 - **Storage**: In-Memory Thread-Safe Map with TTL support.
 - **API**: HTTP (Fallback) / gRPC (Planned).
 
+### Architecture Diagram
+
+```mermaid
+graph TD
+    Client[Client] -->|HTTP/gRPC| API[API Interface]
+    subgraph "Core Domain (Hexagonal)"
+        API --> Service[Service Layer]
+        Service -->|Port| StorePort[Storage Port]
+        Service -->|Port| ConsensusPort[Consensus Port]
+    end
+    StorePort -->|Adapter| MemStore[In-Memory Store]
+    ConsensusPort -->|Adapter| Raft[Raft Consensus]
+    Raft -->|Replicate| Peer[Peer Nodes]
+```
+
+### Consistent Hashing Ring
+
+```mermaid
+graph TD
+    Keys[Keys: k1, k2, k3] --> Hash[Hash Function]
+    Hash --> Ring((Hash Ring))
+    Ring -.->|k1| Node1[Node 1]
+    Ring -.->|k2| Node2[Node 2]
+    Ring -.->|k3| Node3[Node 3]
+    Node1 -.->|Backup| Node2
+```
+
 ## Project Structure
 
 ```
