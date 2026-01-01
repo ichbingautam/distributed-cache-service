@@ -32,19 +32,28 @@ Designed with **Hexagonal Architecture** (Ports and Adapters), the core business
 ### Consistent Hashing Ring
 
 ```mermaid
-graph TD
-    Keys[Keys: k1, k2, k3] --> Hash[Hash Function]
-    Hash --> Ring((Hash Ring))
+graph LR
+    subgraph "Consistent Hash Ring (0 to 2^32-1)"
+        direction LR
+        T1((Token 100\nNode A)) -->|Adjacent| T2((Token 500\nNode B))
+        T2 -->|Adjacent| T3((Token 900\nNode A))
+        T3 -->|Adjacent| T4((Token 1500\nNode C))
+        T4 -.->|Wrap Around| T1
 
-    subgraph "Consistent Hashing Ring"
-        Ring -.->|k1| V1[Node1_TokenA]
-        Ring -.->|k2| V2[Node2_TokenA]
-        Ring -.->|k3| V3[Node1_TokenB]
-
-        V1 -.->|Map to| Node1[Physical Node 1]
-        V3 -.->|Map to| Node1
-        V2 -.->|Map to| Node2[Physical Node 2]
+        Key1[Key 1: Hash 120] -.->|Next| T2
+        Key2[Key 2: Hash 800] -.->|Next| T3
     end
+
+    subgraph "Physical Nodes"
+        NodeA[Node A]
+        NodeB[Node B]
+        NodeC[Node C]
+    end
+
+    T1 -.-> NodeA
+    T3 -.-> NodeA
+    T2 -.-> NodeB
+    T4 -.-> NodeC
 ```
 ### Architecture Diagram
 
@@ -66,16 +75,20 @@ graph TD
 ```
 ├── cmd
 │   └── server          # Main entry point for the application
+├── deploy              # Deployment configs (Prometheus Dockerfile, etc.)
 ├── internal
 │   ├── consensus       # Raft implementation and FSM adapter
 │   ├── core
 │       ├── ports       # Interfaces for Service, Storage, and Consensus
 │       └── service     # Business logic and Command definitions
-│   ├── sharding        # Consistent Hashing implementation
+│   ├── grpc            # gRPC Adapter and Server implementation
+│   ├── observability   # Prometheus metrics definitions
+│   ├── sharding        # Consistent Hashing (Virtual Nodes) implementation
 │   └── store           # In-Memory key-value store implementation
 ├── k8s                 # Kubernetes manifests (StatefulSet, Service)
-├── proto               # Protobuf definitions (for future gRPC)
-└── raft_data           # Directory for Raft logs and snapshots (created at runtime)
+├── proto               # Protobuf definitions (gRPC)
+├── scripts             # Utility scripts
+└── raft_data           # Directory for Raft logs (created at runtime)
 ```
 
 ## Configuration
