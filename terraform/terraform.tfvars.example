@@ -1,0 +1,30 @@
+# -----------------------------------------------------------------------------
+# Example Terraform Variables
+# Copy this file to terraform.tfvars and customize as needed
+# -----------------------------------------------------------------------------
+
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "dev"
+app_name    = "distributed-cache"
+
+# Cache Service Configuration
+cache_replicas  = 3
+cache_cpu       = 512   # 0.5 vCPU
+cache_memory    = 1024  # 1 GB
+cache_image_tag = "latest"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+# availability_zones = ["us-east-1a", "us-east-1b"]  # Auto-detected if empty
+
+# Monitoring
+enable_monitoring      = true
+grafana_admin_password = "your-secure-password-here"
+
+# Additional Tags
+tags = {
+  Owner   = "your-name"
+  Team    = "engineering"
+  Purpose = "distributed-caching"
+}
