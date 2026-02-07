@@ -1,6 +1,6 @@
 module distributed-cache-service
 
-go 1.24.11
+go 1.24.13
 
 require (
 	github.com/hashicorp/raft v1.7.3
