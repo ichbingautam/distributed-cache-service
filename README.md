@@ -17,6 +17,24 @@ Designed with **Hexagonal Architecture** (Ports and Adapters), the core business
 * **Hexagonal Architecture**: Clean separation of concerns using Ports and Adapters to support future upgrades (e.g., swapping HTTP for gRPC or MemoryStore for BadgerDB).
 * **Production Ready**: Includes Kubernetes manifests for StatefulSet deployment, Docker containerization, and comprehensive metrics/profiling hooks (`pprof`).
 
+## Interactive Guide
+
+An interactive Jupyter notebook is available at [`notebooks/distributed_cache_guide.ipynb`](notebooks/distributed_cache_guide.ipynb) that covers:
+
+* **Architecture Overview**: Hexagonal architecture and system design
+* **Consistent Hashing**: Implementation with virtual nodes and distribution analysis
+* **Raft Consensus**: Leader election and write flow simulation
+* **Cache Operations**: Set, Get, Delete with TTL support
+* **Eviction Policies**: LRU, LFU, FIFO, and Random policy comparisons
+* **Performance Analysis**: Throughput, latency, hit rate, and SingleFlight request coalescing
+
+To run the notebook:
+
+```bash
+pip install jupyter matplotlib numpy
+jupyter notebook notebooks/distributed_cache_guide.ipynb
+```
+
 ## Architecture Patterns
 
 * **Hexagonal Architecture (Ports & Adapters)**:
@@ -245,6 +263,7 @@ docker push $(terraform output -raw ecr_repository_url):latest
 #### Outputs
 
 After deployment, Terraform outputs:
+
 * `cache_service_url` - ALB endpoint for the cache service
 * `grafana_url` - Grafana dashboard URL (if monitoring enabled)
 * `ecr_repository_url` - ECR repository for CI/CD integration
@@ -515,6 +534,7 @@ Using specific Proto definitions offers significant advantages over JSON/HTTP:
 ### Service Definition
 
 The `CacheService` defines the following RPC methods:
+
 * `Get(GetRequest) returns (GetResponse)`: Retrieve value by key.
 * `Set(SetRequest) returns (SetResponse)`: Store value with TTL.
 * `Delete(DeleteRequest) returns (DeleteResponse)`: Remove value.
@@ -567,6 +587,7 @@ pre-commit install
 ```
 
 Now, every `git commit` will automatically run:
+
 * Formatting (`gofmt`)
 * Linting (`golangci-lint`)
 * Unit Tests
